@@ -167,10 +167,13 @@
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }, audio: false
+          video: { facingMode: { exact: "environment" } },
+          audio: false
         });
         video.srcObject = stream;
+        await video.play();
       } catch (e) {
+        console.error(e);
         alert("Нет доступа к камере. Нужен HTTPS и разрешение.");
       }
     }
