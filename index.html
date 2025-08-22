@@ -25,6 +25,15 @@
     .action {background:#1b221f;border:1px solid #2b332f;color:#fff;padding:8px 12px;border-radius:10px}
     .ghost {background:transparent;border:1px solid #2b332f;color:#fff;padding:8px 12px;border-radius:10px}
     .screen {position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:16px}
+    /* 👇 щоб екран камери не центрувався і займав всю висоту */
+    #screen-camera {
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 0;
+    }
+    /* 👇 підстраховка, щоб контейнер не став 0px до старту стріму */
+    #preview { min-height: 50vh; }
+
     .card {width:min(560px, 92vw);background:#121816;border:1px solid #243029;border-radius:16px;padding:20px}
     .title {font-size:22px;font-weight:700;margin:0 0 8px}
     .subtitle {opacity:.85;margin:0 0 18px}
@@ -166,17 +175,50 @@
 
     async function startCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } },
-          audio: false
-        });
+        // програмно додамо атрибути сумісності
+        video.setAttribute('playsinline', '');       // iOS/Android
+        video.setAttribute('webkit-playsinline', '');// старий iOS
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+        video.muted = true;
+
+        // 1) пробуємо задню камеру як ideal (а не exact)
+        let constraints = { video: { facingMode: { ideal: "environment" } }, audio: false };
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (e1) {
+          // 2) fallback: будь-яка камера
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
         video.srcObject = stream;
-        await video.play();
+
+        // дочекатись метаданих, тоді play()
+        await new Promise((res) => {
+          if (video.readyState >= 2) res();
+          else video.onloadedmetadata = () => res();
+        });
+
+        // перша спроба відтворення
+        try { await video.play(); } catch {}
+
+        // якщо вкладка поверталась з бекграунду — ще раз спробувати
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) video.play().catch(()=>{});
+        });
+
+        // ще одна «жестова» підстраховка
+        document.getElementById('preview').addEventListener('click', () => {
+          video.play().catch(()=>{});
+        }, { once: true });
+
       } catch (e) {
         console.error(e);
         alert("Нет доступа к камере. Нужен HTTPS и разрешение.");
       }
     }
+
 
     function selectCountry(c) {
       localStorage.setItem('ecozen_country', JSON.stringify(c));
