@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<body style="margin:0;background:black">
+<video id="v" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+<script>
+  (async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      document.getElementById("v").srcObject = stream;
+      console.log("ok", stream.getVideoTracks());
+    } catch(e) {
+      console.error(e);
+      alert(e.message);
+    }
+  })();
+</script>
+</body>
+</html>
