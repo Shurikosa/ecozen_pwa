@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>EcoZen Demo</title>
+
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea15f">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EcoZen">
+
+  <style>
+    html,body {margin:0;height:100%;background:#0f1412;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial}
+    button {border:none}
+    .hidden {display:none !important}
+    .app {position:fixed;inset:0;display:flex;flex-direction:column}
+    header {display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0f1412bb;backdrop-filter:blur(6px);z-index:3}
+    header .brand {display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+    header .dot {width:10px;height:10px;border-radius:50%;background:#2dd35c}
+    header .right {display:flex;gap:8px}
+    .action {background:#1b221f;border:1px solid #2b332f;color:#fff;padding:8px 12px;border-radius:10px}
+    .ghost {background:transparent;border:1px solid #2b332f;color:#fff;padding:8px 12px;border-radius:10px}
+    .screen {position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:16px}
+    .card {width:min(560px, 92vw);background:#121816;border:1px solid #243029;border-radius:16px;padding:20px}
+    .title {font-size:22px;font-weight:700;margin:0 0 8px}
+    .subtitle {opacity:.85;margin:0 0 18px}
+    .list {display:grid;gap:10px}
+    .item {display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#0f1412;border-radius:12px;border:1px solid #27322c;cursor:pointer}
+    .item span {font-weight:600}
+    #preview {flex:1;position:relative;background:#000;overflow:hidden}
+    video {position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .bottomBar {position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;gap:24px;padding:18px;z-index:3}
+    .shutter {width:74px;height:74px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px #ffffff22;border:6px solid #ddd;cursor:pointer}
+    .resultCard {position:absolute;left:16px;right:16px;bottom:110px;border-radius:14px;padding:16px;background:#121816e6;backdrop-filter:blur(8px);display:none;z-index:3}
+    .resultRow {display:flex;align-items:center;gap:12px}
+    .binIcon {width:36px;height:36px;border-radius:8px;display:grid;place-items:center;background:#1e2422}
+    .flash {position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5}
+    .badge {position:absolute;top:14px;right:14px;font-size:12px;padding:6px 10px;border-radius:999px;background:#00000066;border:1px solid #ffffff22}
+    .backBtn {position:absolute;top:14px;left:14px;z-index:4}
+    .backBtn button {background:#00000066;border:1px solid #ffffff22;color:#fff;padding:8px 12px;border-radius:999px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="dot"></div>
+        <div id="brandLabel">EcoZen</div>
+      </div>
+      <div class="right">
+        <button id="exitBtn" class="ghost hidden">Выйти</button>
+      </div>
+    </header>
+
+    <!-- Экран выбора страны -->
+    <div id="screen-country" class="screen">
+      <div class="card">
+        <h1 class="title">Выберите страну</h1>
+        <p class="subtitle">Это демо. Страна влияет только на подпись в заголовке.</p>
+        <div class="list" id="countryList"></div>
+      </div>
+    </div>
+
+    <!-- Экран камеры -->
+    <div id="screen-camera" class="screen hidden">
+      <div id="preview">
+        <div class="badge" id="countryBadge">Demo</div>
+        <div class="backBtn"><button id="backFromCamera" class="hidden">Назад</button></div>
+        <video id="video" autoplay playsinline muted></video>
+        <div id="result" class="resultCard">
+          <div class="resultRow">
+            <div id="binIcon" class="binIcon"></div>
+            <div>
+              <div id="resultTitle" class="title" style="font-size:18px"></div>
+              <div id="resultSubtitle" class="subtitle"></div>
+            </div>
+          </div>
+        </div>
+        <div id="flash" class="flash"></div>
+        <div class="bottomBar">
+          <button id="shutter" class="shutter" aria-label="Сделать снимок"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Страны с флажками
+    const COUNTRIES = [
+      { code: 'DE', name: 'Германия', flag: '🇩🇪' },
+      { code: 'PL', name: 'Польша', flag: '🇵🇱' },
+      { code: 'FR', name: 'Франция', flag: '🇫🇷' },
+      { code: 'NL', name: 'Нидерланды', flag: '🇳🇱' },
+      { code: 'US', name: 'США', flag: '🇺🇸' }
+    ];
+
+    // Сценарий классификации
+    const script = [
+      {title: "Бумага",  bin: "Зелёный контейнер", color: "#2dd35c"},
+      {title: "Пластик", bin: "Жёлтый контейнер",  color: "#ffd000"},
+      {title: "Общие отходы", bin: "Чёрный контейнер", color: "#1f1f1f"},
+      {title: "Общие отходы", bin: "Чёрный контейнер", color: "#1f1f1f"}
+    ];
+    let stepIdx = 0;
+
+    // Элементы
+    const countryScreen = document.getElementById('screen-country');
+    const cameraScreen = document.getElementById('screen-camera');
+    const countryList = document.getElementById('countryList');
+    const exitBtn = document.getElementById('exitBtn');
+    const shutter = document.getElementById('shutter');
+    const flashEl = document.getElementById('flash');
+    const resultCard = document.getElementById('result');
+    const resultTitle = document.getElementById('resultTitle');
+    const resultSubtitle = document.getElementById('resultSubtitle');
+    const binIcon = document.getElementById('binIcon');
+    const countryBadge = document.getElementById('countryBadge');
+    const backFromCamera = document.getElementById('backFromCamera');
+    const brandLabel = document.getElementById('brandLabel');
+    const video = document.getElementById('video');
+
+    function show(el){ el.classList.remove('hidden'); }
+    function hide(el){ el.classList.add('hidden'); }
+
+    function binSVG(fill="#fff") {
+      return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 7h8l-.8 11.2a2 2 0 0 1-2 1.8h-2.4a2 2 0 0 1-2-1.8L8 7Z" stroke="${fill}" stroke-width="1.7"/>
+        <path d="M9 7V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8V7" stroke="${fill}" stroke-width="1.7"/>
+        <path d="M5 7h14" stroke="${fill}" stroke-width="1.7"/>
+      </svg>`;
+    }
+
+    function flash() {
+      flashEl.style.transition = "none";
+      flashEl.style.opacity = 1;
+      requestAnimationFrame(() => {
+        flashEl.style.transition = "opacity 280ms ease";
+        flashEl.style.opacity = 0;
+      });
+    }
+
+    function showResult(step) {
+      resultTitle.textContent = step.title;
+      resultSubtitle.textContent = step.bin;
+      binIcon.style.background = step.color;
+      binIcon.innerHTML = binSVG("#fff");
+      resultCard.style.display = "block";
+      resultCard.animate([{opacity:0, transform:"translateY(12px)"},{opacity:1, transform:"translateY(0)"}], {duration:220, fill:"forwards", easing:"ease-out"});
+      show(backFromCamera);
+    }
+
+    function renderCountries() {
+      countryList.innerHTML = '';
+      COUNTRIES.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<span>${c.flag} ${c.name}</span><small style="opacity:.8">${c.code}</small>`;
+        div.onclick = () => selectCountry(c);
+        countryList.appendChild(div);
+      });
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }, audio: false
+        });
+        video.srcObject = stream;
+      } catch (e) {
+        alert("Нет доступа к камере. Нужен HTTPS и разрешение.");
+      }
+    }
+
+    function selectCountry(c) {
+      localStorage.setItem('ecozen_country', JSON.stringify(c));
+      countryBadge.textContent = c.name;
+      brandLabel.textContent = `EcoZen ${c.flag} ${c.name}`;
+      hide(countryScreen);
+      show(cameraScreen);
+      show(exitBtn);
+      startCamera();
+    }
+
+    function exitToCountry() {
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
+      hide(cameraScreen);
+      show(countryScreen);
+      hide(exitBtn);
+      hide(backFromCamera);
+      resultCard.style.display = "none";
+      stepIdx = 0;
+      brandLabel.textContent = "EcoZen";
+    }
+
+    exitBtn.addEventListener('click', exitToCountry);
+    shutter.addEventListener('click', () => {
+      flash();
+      showResult(script[stepIdx]);
+      stepIdx = (stepIdx + 1) % script.length;
+    });
+    backFromCamera.addEventListener('click', () => {
+      resultCard.style.display = "none";
+      hide(backFromCamera);
+    });
+
+    renderCountries();
+    const saved = localStorage.getItem('ecozen_country');
+    if (saved) {
+      try {
+        const c = JSON.parse(saved);
+        countryBadge.textContent = c.name;
+        brandLabel.textContent = `EcoZen ${c.flag} ${c.name}`;
+        hide(countryScreen);
+        show(cameraScreen);
+        show(exitBtn);
+        startCamera();
+      } catch {}
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    }
+  </script>
+</body>
+</html>
